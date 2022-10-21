@@ -459,9 +459,15 @@ void *app_thread_process(void *fd)
             unsigned char size;
             char *address = socks5_domain_read(net_fd, &size);
             unsigned short int p = socks_read_port(net_fd);
+            if ((0 == size) || (0 == p)) {
+                free(address);
+                app_thread_exit(1, net_fd);
+                break;
+            }
 
             inet_fd = app_connect(DOMAIN, (void *)address, ntohs(p));
             if (inet_fd == -1) {
+                free(address);
                 app_thread_exit(1, net_fd);
             }
             socks5_domain_send_response(net_fd, address, size, p);
