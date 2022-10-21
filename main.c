@@ -24,6 +24,7 @@
 #define ARRAY_INIT    {0}
 
 unsigned short int port = 1080;
+int dump_mode = 0;	 // { 0: dump_none, 1: dump_inet }
 int daemon_mode = 0;
 int auth_type;
 char *arg_username;
@@ -62,6 +63,26 @@ enum socks_status {
     OK = 0x00,
     FAILED = 0x05
 };
+
+void dump_buf(const char *buf,int len)
+{
+    if (0 == dump_mode) {
+        return;
+    }
+
+    int idx = 0;
+    for (idx=0; idx<len ; idx++) {
+        fprintf(log_file, "%02X", (unsigned)(0xFF & buf[idx]));
+        if ((idx > 0) && (0 == idx%32))
+            fprintf(log_file, "\n");
+        else if ((idx > 0) && (0 == idx%16))
+            fprintf(log_file, " - ");
+        else
+            fprintf(log_file, " ");
+    }
+    fprintf(log_file, "\n");
+    fflush(log_file);
+}
 
 void log_message(const char *message, ...)
 {
@@ -418,9 +439,11 @@ void app_socket_pipe(int fd0, int fd1)
 
         if (FD_ISSET(fd0, &rd_set)) {
             nread = recv(fd0, buffer_r, BUFSIZE, 0);
+            log_message("<RECV>: fd0 [%d]", nread);
             if (nread <= 0)
                 break;
             send(fd1, (const void *)buffer_r, nread, 0);
+            dump_buf(buffer_r, nread);
         }
 
         if (FD_ISSET(fd1, &rd_set)) {
@@ -428,6 +451,8 @@ void app_socket_pipe(int fd0, int fd1)
             if (nread <= 0)
                 break;
             send(fd0, (const void *)buffer_r, nread, 0);
+            log_message("<SEND>: fd0 [%d]", nread);
+            dump_buf(buffer_r, nread);
         }
     }
 }
@@ -637,8 +662,12 @@ int main(int argc, char *argv[])
 
     signal(SIGPIPE, SIG_IGN);
 
-    while ((ret = getopt(argc, argv, "n:u:p:l:a:hd")) != -1) {
+    while ((ret = getopt(argc, argv, "n:u:p:l:a:hdv")) != -1) {
         switch (ret) {
+        case 'v': {
+            dump_mode = 1;
+            break;
+        }
         case 'd': {
             daemon_mode = 1;
             daemonize();
